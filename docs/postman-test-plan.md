@@ -76,7 +76,7 @@ Admins, Managers and Employees each see and do only what their role and ownershi
 | State | Angular Signals |
 | Forms | Classic Reactive Forms, custom + async validators |
 | Client JWT parsing | `jwt-decode` |
-| API testing | Postman (100-case role/ownership matrix) |
+| API testing | Postman ([100-case role/ownership matrix](docs/postman-test-plan.md)) |
 
 ---
 
@@ -131,7 +131,7 @@ Admins, Managers and Employees each see and do only what their role and ownershi
 | Full task edit / delete | ✅ | ✅ own projects | ❌ |
 | View tasks | all | own projects' tasks | only tasks assigned to them |
 
-> The backend independently rejects unauthorized calls with **403**. Hiding buttons in Angular is a UX nicety, never the security boundary.
+> The backend independently rejects unauthorized calls with **403**. Hiding buttons in Angular is a UX nicety, never the security boundary. Every cell of this matrix is exercised by the [Postman test plan](docs/postman-test-plan.md).
 
 ---
 
@@ -146,22 +146,23 @@ Admins, Managers and Employees each see and do only what their role and ownershi
 ### Projects
 > Role-aware project list with pagination, create/edit dialog and delete confirmation.
 
-![Projects](docs/screenshots/project_list.jpg)
-![Projects](docs/screenshots/project_view.jpg)
-![Projects](docs/screenshots/project_create.jpg)
+![Project list](docs/screenshots/project_list.jpg)
+![Project view](docs/screenshots/project_view.jpg)
+![Project create](docs/screenshots/project_create.jpg)
 
 ### Tasks
 > Task list per project with status, priority and due date and comments; employees see only their own tasks.
 
-![Tasks](docs/screenshots/task_list.jpg)
-![Tasks](docs/screenshots/task_view.jpg)
-![Tasks](docs/screenshots/task_create.jpg)
-![Tasks](docs/screenshots/task_comments.jpg)
+![Task list](docs/screenshots/task_list.jpg)
+![Task view](docs/screenshots/task_view.jpg)
+![Task create](docs/screenshots/task_create.jpg)
+![Task comments](docs/screenshots/task_comments.jpg)
 
 ### Users (Admin)
 > Card directory with role-colored edge, avatar, and derived stats.
 
-![Users](docs/screenshots/users_list.jpg)
+![Users list](docs/screenshots/users_list.jpg)
+
 ---
 
 ## Project Structure
@@ -207,6 +208,10 @@ TaskFlow/
 │       │   ├── shell/                    # Authenticated chrome + global progress bar
 │       │   └── nav/                      # Role-aware navigation, identity chip
 │       └── shared/                       # confirm-dialog, form-pulse, avatar-color, notification
+│
+├── docs/
+│   ├── postman-test-plan.md              # 100-case role/ownership test matrix
+│   └── screenshots/                      # UI screenshots used in this README
 │
 ├── .env.example                          # Required/optional environment variables
 └── README.md
@@ -372,6 +377,8 @@ Every error — validation, 401, 403, 404 — uses one shape:
 ## Testing
 
 The backend is verified against a **100-case Postman matrix** run with five identities: `admin`, `managerA`, `managerB`, `employee1` (assigned), `employee2` (unassigned).
+
+📄 **Full test plan: [`docs/postman-test-plan.md`](docs/postman-test-plan.md)** — every case lists the token used, the target resource, and the expected status code, so it can be replayed request by request or turned into a Postman collection with status assertions.
 
 | Phase | What it proves |
 |---|---|
