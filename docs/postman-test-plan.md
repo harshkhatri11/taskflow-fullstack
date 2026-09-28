@@ -1,445 +1,251 @@
-<div align="center">
 
-# ✅ TaskFlow
-
-**A role-based project & task management system — Spring Boot REST API + Angular dashboard.**
-
-Admins, Managers and Employees each see and do only what their role and ownership allow, enforced on the server, not just hidden in the UI.
-
-*Built end-to-end to showcase senior full-stack engineering: JWT auth with rotating refresh tokens, method-level authorization with ownership checks, strict DTO boundaries, and a signal-based Angular frontend.*
-
+# TaskFlow — Postman Test Plan (Full Role/Ownership Matrix)
+ 
+Run this in the order below. Each phase depends on data created in the previous one — don't skip ahead. Save every returned token/id into Postman **environment variables** as you go (`adminToken`, `managerAToken`, `managerBToken`, `employee1Token`, `employee2Token`, `projectAId`, `projectBId`, `task1Id`, `task2Id`, `comment1Id`, etc.) so later requests can reference them without copy-pasting.
+ 
 ---
-
-![Java](https://img.shields.io/badge/Java-21-orange?logo=openjdk&logoColor=white)
-![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5-6DB33F?logo=springboot&logoColor=white)
-![Spring Security](https://img.shields.io/badge/Spring%20Security-JWT-6DB33F?logo=springsecurity&logoColor=white)
-![Angular](https://img.shields.io/badge/Angular-22-DD0031?logo=angular&logoColor=white)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?logo=postgresql&logoColor=white)
-![Redis](https://img.shields.io/badge/Redis-DC382D?logo=redis&logoColor=white)
-
-</div>
-
----
-
-## Table of Contents
-
-- [Architecture](#architecture)
-- [Tech Stack](#tech-stack)
-- [Features](#features)
-- [Roles & Permission Matrix](#roles--permission-matrix)
-- [Gallery](#gallery)
-- [Project Structure](#project-structure)
-- [Getting Started](#getting-started)
-- [API Reference](#api-reference)
-- [Security Model](#security-model)
-- [Testing](#testing)
-- [Key Engineering Decisions](#key-engineering-decisions)
-
----
-
-## Architecture
-
-```
-┌────────────────────┐        HTTPS + Bearer JWT        ┌─────────────────────────────┐
-│  Angular 22 (SPA)  │ ───────────────────────────────▶ │  Spring Boot 3.5 REST API   │
-│  Signals · Material│ ◀─────────────────────────────── │  Controller → Service → Repo│
-│  Guards · Interc.  │        JSON (DTOs only)          └──────────┬───────────┬──────┘
-└────────────────────┘                                             │           │
-                                                        JPA / SQL  │           │  refresh:{userId}
-                                                                   ▼           ▼
-                                                            ┌────────────┐ ┌─────────┐
-                                                            │ PostgreSQL │ │  Redis  │
-                                                            └────────────┘ └─────────┘
-```
-
-### How a request flows
-
-1. **Login** — `POST /api/auth/login` is authenticated the classic way: `AuthenticationManager` → `CustomUserDetailsService` → BCrypt comparison. This is the only step that touches the database for credentials.
-2. **Tokens issued** — a signed 15-minute **access JWT** (`sub`, `userId`, `role` claims) and an opaque 7-day **refresh token** stored in Redis as `refresh:{userId}`.
-3. **Every later request** — `JwtAuthenticationFilter` verifies the signature and expiry, builds the principal straight from the claims, and populates `SecurityContextHolder`. **No DB call per request.**
-4. **Authorization** — `@PreAuthorize` on the service implementation evaluates role and ownership (e.g. `@projectSecurity.isOwner(#id, authentication)`) before the method body runs.
-5. **Failure modes are distinct** — missing/invalid/expired token → **401** (`JwtAuthenticationEntryPoint`, filter layer). Valid token but insufficient role/ownership → **403** (`AccessDeniedException`, handled by `GlobalExceptionHandler`). Both return the same `ErrorResponse` JSON shape.
-6. **Silent refresh** — on a 401, the Angular interceptor calls `/api/auth/refresh` once (even if many requests fail concurrently), rotates the refresh token, and retries the queued requests.
-
----
-
-## Tech Stack
-
-| Layer | Technology |
-|---|---|
-| Backend | Java 21, Spring Boot 3.5, Spring Security, Spring Data JPA |
-| Auth | JWT access tokens (15 min) + Redis-backed opaque refresh tokens with rotation and revocation |
-| Database | PostgreSQL |
-| Cache / token store | Redis |
-| Password hashing | BCrypt |
-| Frontend | Angular 22, Angular Material (M3 theme), SCSS |
-| State | Angular Signals |
-| Forms | Classic Reactive Forms, custom + async validators |
-| Client JWT parsing | `jwt-decode` |
-| API testing | Postman ([100-case role/ownership matrix](docs/postman-test-plan.md)) |
-
----
-
-## Features
-
-### 🔐 Authentication & Sessions
-| | Feature | Detail |
+ 
+## Phase 0 — Test data setup
+ 
+You need this exact cast of characters for the matrix to mean anything:
+ 
+| Var name | Role | Notes |
 |---|---|---|
-| 🔑 | **JWT access tokens** | 15-minute expiry, `userId` and `role` embedded as claims so requests need no DB lookup |
-| ♻️ | **Rotating refresh tokens** | Opaque UUID in Redis with 7-day TTL; every refresh issues a new token and kills the old one |
-| 🚪 | **Instant logout** | `DEL` on the Redis key revokes the refresh token immediately |
-| 🔄 | **Silent refresh in the SPA** | Interceptor refreshes on 401 with a shared in-flight guard — N concurrent 401s cause exactly one refresh call |
-| ⚡ | **Cold-boot session restore** | `provideAppInitializer` restores a session from a live refresh token after a hard reload, bounded by a 5s timeout |
-
-### 🛡️ Authorization
-| | Feature | Detail |
-|---|---|---|
-| 👥 | **Three roles** | `ADMIN`, `MANAGER`, `EMPLOYEE` with a full permission matrix (below) |
-| 🏷️ | **Ownership checks** | Manager A can never modify Manager B's project — role alone is never enough |
-| 🎯 | **Least-privilege endpoints** | Employees get a narrow `PATCH /tasks/{id}/status` instead of the full `PUT` |
-| 🕵️ | **Existence hiding** | `GET /projects/{id}` returns **404** (not 403) for projects you can't access, so IDs can't be probed |
-
-### 📋 Projects, Tasks & Comments
-| | Feature | Detail |
-|---|---|---|
-| 📁 | **Projects** | Create, edit, view, delete, paginated list — scoped server-side by role |
-| ✅ | **Tasks** | Assign to employees, priority, due date, status workflow, pagination + sorting by due date/priority |
-| 💬 | **Comments** | Post/view/delete with asymmetric permissions; history survives author deletion via a denormalized `authorName` snapshot |
-| 👤 | **Users (admin)** | Card-based directory with role-conditional derived stats (active projects / open tasks), batch-fetched to avoid N+1 |
-
-### 🎨 Frontend Experience
-| | Feature | Detail |
-|---|---|---|
-| 🧭 | **Guards** | `AuthGuard`, `RoleGuard` on parent routes protect whole subtrees |
-| 📝 | **Reactive forms** | Cross-field validator (password match), async validator (`check-email`), custom past-date validator, live character counts |
-| 🧩 | **FormPulse** | Reusable form-validation-summary component driven by a shared error-message registry |
-| ⏳ | **Global loading bar** | Signal-based active-request counter fed by a functional interceptor |
-| 🔔 | **Notifications** | 403 shows a snackbar instead of redirecting — the user is logged in, just lacks permission |
-
+| `admin` | ADMIN | created directly or seeded |
+| `managerA` | MANAGER | owns Project A |
+| `managerB` | MANAGER | owns Project B — used to prove A can't touch B's stuff |
+| `employee1` | EMPLOYEE | assigned to Task 1 in Project A |
+| `employee2` | EMPLOYEE | **not** assigned to any task in Project A — used to prove employees can't see/touch each other's tasks |
+ 
+Setup sequence:
+1. Register `managerA`, `managerB`, `employee1`, `employee2` via `POST /api/auth/register` (all will land as EMPLOYEE by default — see 1.1).
+2. Promote `managerA`/`managerB` to MANAGER using the ADMIN account (`POST /api/users`, ADMIN-only) — or if `admin` doesn't exist yet, create it first however your project bootstraps the first admin (seed script / DB insert), since there's no self-service path to ADMIN.
+3. Log in as each user, save tokens.
+4. As `managerA`: create Project A (`POST /api/projects`).
+5. As `managerB`: create Project B.
+6. As `managerA`: create Task 1 in Project A, assigned to `employee1`.
+7. Confirm `employee2` has zero tasks anywhere.
 ---
-
-## Roles & Permission Matrix
-
-| Action | ADMIN | MANAGER | EMPLOYEE |
+ 
+## Phase 1 — Auth smoke test
+ 
+### 1.1 `POST /api/auth/register`
+| # | Case | Body | Expected |
 |---|---|---|---|
-| Create / delete users | ✅ | ❌ | ❌ |
-| View all users | ✅ full | ✅ summary only | ❌ |
-| Create / update / delete project | ✅ | ✅ own projects only | ❌ |
-| View projects | all | own projects | projects containing their tasks |
-| Create / assign task | ✅ | ✅ within own projects | ❌ |
-| Update task status | ✅ | ✅ own projects | ✅ only their assigned task, status field only |
-| Full task edit / delete | ✅ | ✅ own projects | ❌ |
-| View tasks | all | own projects' tasks | only tasks assigned to them |
-
-> The backend independently rejects unauthorized calls with **403**. Hiding buttons in Angular is a UX nicety, never the security boundary. Every cell of this matrix is exercised by the [Postman test plan](docs/postman-test-plan.md).
-
----
-
-## Gallery
-
-### Login & Register
-> Reactive forms with inline errors after `touched || dirty`, async email-taken check and password-mismatch validation.
-
-![Login](docs/screenshots/login.jpg)
-![Register](docs/screenshots/register.jpg)
-
-### Projects
-> Role-aware project list with pagination, create/edit dialog and delete confirmation.
-
-![Project list](docs/screenshots/project_list.jpg)
-![Project view](docs/screenshots/project_view.jpg)
-![Project create](docs/screenshots/project_create.jpg)
-
-### Tasks
-> Task list per project with status, priority and due date and comments; employees see only their own tasks.
-
-![Task list](docs/screenshots/task_list.jpg)
-![Task view](docs/screenshots/task_view.jpg)
-![Task create](docs/screenshots/task_create.jpg)
-![Task comments](docs/screenshots/task_comments.jpg)
-
-### Users (Admin)
-> Card directory with role-colored edge, avatar, and derived stats.
-
-![Users list](docs/screenshots/users_list.jpg)
-
----
-
-## Project Structure
-
-```
-TaskFlow/
-├── Backend/                              # Spring Boot REST API
-│   ├── src/main/java/com/taskflow/backend/
-│   │   ├── config/                       # SecurityConfig (filter chain, CORS, method security)
-│   │   ├── controller/                   # Auth, User, Project, Task, Comment controllers
-│   │   ├── dto/
-│   │   │   ├── request/                  # Validated request DTOs
-│   │   │   └── response/                 # Response DTOs (no entity ever leaves the service layer)
-│   │   ├── entity/                       # User, Project, Task, Comment
-│   │   ├── enums/                        # Role, ProjectStatus, TaskStatus, TaskPriority
-│   │   ├── exception/                    # GlobalExceptionHandler, ErrorResponse, custom exceptions
-│   │   ├── repository/                   # Spring Data JPA repositories
-│   │   │   └── projection/               # Grouped-count projections for batch-fetched stats
-│   │   ├── security/                     # JwtUtil, JwtAuthenticationFilter, EntryPoint,
-│   │   │                                 # CustomUserDetails(+Service), RefreshTokenService,
-│   │   │                                 # ProjectSecurity / TaskSecurity / CommentSecurity beans
-│   │   └── service/                      # Service interfaces
-│   │       └── impl/                     # Implementations (@PreAuthorize lives here)
-│   ├── src/main/resources/application.yaml
-│   ├── scripts.sql                       # Schema / seed script
-│   └── pom.xml
-│
-├── taskflow-frontend/                    # Angular 22 SPA
-│   └── src/app/
-│       ├── core/
-│       │   ├── auth/                     # AuthService, AuthInterceptor, AuthGuard, RoleGuard
-│       │   ├── config/                   # API base-URL injection token
-│       │   ├── loading/                  # LoadingService + loading interceptor
-│       │   └── models/                   # Typed API models and enums
-│       ├── features/
-│       │   ├── auth-ui/                  # login, register, unauthorized
-│       │   ├── projects/                 # list, create/edit, view dialog, access guard
-│       │   ├── tasks/                    # list, edit dialog, view dialog, date validators
-│       │   ├── comments/                 # comment-section (embedded in task view)
-│       │   ├── users/                    # admin card list, user card, edit dialog
-│       │   └── not-found/                # 404 page at the wildcard route
-│       ├── layout/
-│       │   ├── shell/                    # Authenticated chrome + global progress bar
-│       │   └── nav/                      # Role-aware navigation, identity chip
-│       └── shared/                       # confirm-dialog, form-pulse, avatar-color, notification
-│
-├── docs/
-│   ├── postman-test-plan.md              # 100-case role/ownership test matrix
-│   └── screenshots/                      # UI screenshots used in this README
-│
-├── .env.example                          # Required/optional environment variables
-└── README.md
-```
-
----
-
-## Getting Started
-
-### Prerequisites
-
-- Java 21
-- Node.js 22
-- PostgreSQL running locally
-- Redis running locally
-
-### 1. Clone the repo
-
-```bash
-git clone https://github.com/harshkhatri11/taskflow-fullstack.git
-cd taskflow-fullstack
-```
-
-### 2. Create the database
-
-```bash
-createdb taskFlow
-psql -d taskFlow -f Backend/scripts.sql
-```
-
-### 3. Configure environment
-
-Spring Boot does **not** read `.env` files by itself. Set these as real environment variables (IntelliJ Run Configuration, shell `export`, or your container runtime). `.env.example` documents them.
-
-| Variable | Required | Default | Purpose |
+| 1 | Valid registration | `{name, email, password}` | 201/200, role in response is `EMPLOYEE` regardless of what you send (if you try to sneak `role: ADMIN` in the body, confirm it's ignored) |
+| 2 | Duplicate email | same email as #1 | 400/409, clear error message, no stack trace leaked |
+| 3 | Missing/invalid fields | omit `email`, or malformed email | 400 with `errors` field-map populated |
+| 4 | Weak password | password under your min length | 400 with `errors` map |
+ 
+### 1.2 `POST /api/auth/login`
+| # | Case | Expected |
+|---|---|---|
+| 5 | Correct credentials | 200, body has `accessToken`, `refreshToken`, `expiresIn`, `role` |
+| 6 | Wrong password | 401, generic message (don't leak "user exists but wrong password" vs "no such user" — same message either way) |
+| 7 | Non-existent email | 401, same generic message as #6 |
+| 8 | **Password never in response** | Confirm `password`/`passwordHash` is absent from every one of the above response bodies |
+ 
+### 1.3 Protected route with the fresh token
+| # | Case | Expected |
+|---|---|---|
+| 9 | `GET /api/users/me` with valid `accessToken` | 200, own profile, no password field |
+| 10 | Same call, no `Authorization` header | 401 via `JwtAuthenticationEntryPoint` — check the JSON shape matches `ErrorResponse` (`timestamp, status, message, path`) |
+| 11 | Same call, garbage token (`Bearer abc123`) | 401, same shape |
+| 12 | Same call, expired token (wait out 15 min, or temporarily shrink TTL in config to test faster) | 401, same shape |
+ 
+### 1.4 `POST /api/auth/refresh`
+| # | Case | Body | Expected |
 |---|---|---|---|
-| `TASKFLOW_DB_USERNAME` | ✅ | — | PostgreSQL user |
-| `TASKFLOW_DB_PASSWORD` | ✅ | — | PostgreSQL password |
-| `TASKFLOW_JWT_SECRET` | ✅ | — | Base64 HS256 signing key (32+ bytes). Generate: `openssl rand -base64 48` |
-| `TASKFLOW_DB_HOST` | | `localhost` | |
-| `TASKFLOW_DB_PORT` | | `5432` | |
-| `TASKFLOW_DB_NAME` | | `taskFlow` | |
-| `TASKFLOW_REDIS_HOST` | | `localhost` | |
-| `TASKFLOW_REDIS_PORT` | | `6379` | |
-| `TASKFLOW_JWT_ACCESS_EXPIRY_MS` | | `900000` | 15 minutes |
-| `TASKFLOW_JWT_REFRESH_EXPIRY_DAYS` | | `7` | |
-| `TASKFLOW_CORS_ALLOWED_ORIGINS` | | `http://localhost:4200` | |
-
-Secrets have **no defaults on purpose** — the app fails at startup if they're missing rather than silently signing tokens with a fallback key.
-
-### 4. Run the backend
-
-```bash
-cd Backend
-export TASKFLOW_DB_USERNAME=... TASKFLOW_DB_PASSWORD=... TASKFLOW_JWT_SECRET=...
-./mvnw spring-boot:run
-```
-
-### 5. Run the frontend
-
-```bash
-cd taskflow-frontend
-npm install
-ng serve
-```
-
-### 6. Access the app
-
-| Service | URL |
-|---|---|
-| Angular app | http://localhost:4200 |
-| REST API | http://localhost:8080/api |
-
-> There is no self-service path to `ADMIN`. Bootstrap the first admin by inserting a row (or seed via `scripts.sql`), then create other users from the admin UI.
-
----
-
-## API Reference
-
-### Auth (public)
-
-| Method | Endpoint | Description |
+| 13 | Valid refresh | `{userId, refreshToken}` from login | 200, **new** `accessToken` and **new** `refreshToken` (rotation — old refresh token should now be dead, test #15) |
+| 14 | Wrong/garbage refresh token | `{userId, refreshToken: "junk"}` | 401 via `InvalidTokenException` (this one **is** caught by `GlobalExceptionHandler`, unlike filter-layer 401 — confirm both look identical to the client) |
+| 15 | Reuse the *old* refresh token from #13 after rotation | same old token | 401 — proves rotation actually invalidated it |
+ 
+### 1.5 `POST /api/auth/logout`
+| # | Case | Expected |
 |---|---|---|
-| `POST` | `/api/auth/register` | Register — role is always `EMPLOYEE`; any `role` in the body is ignored |
-| `POST` | `/api/auth/login` | Returns `accessToken`, `refreshToken`, `expiresIn`, `role` |
-| `POST` | `/api/auth/refresh` | Rotates the refresh token, returns a new pair |
-| `POST` | `/api/auth/logout` | Revokes the refresh token |
-| `GET` | `/api/auth/check-email` | `{ exists: boolean }` — backs the async validator |
-
-### Users
-
-| Method | Endpoint | Access |
-|---|---|---|
-| `GET` | `/api/users` | ADMIN (full), MANAGER (summary fields only) |
-| `POST` | `/api/users` | ADMIN |
-| `DELETE` | `/api/users/{id}` | ADMIN |
-| `GET` | `/api/users/me` | Any authenticated |
-
-### Projects
-
-| Method | Endpoint | Access |
-|---|---|---|
-| `GET` | `/api/projects` | Scoped server-side by role |
-| `GET` | `/api/projects/{id}` | Per matrix — **404** if not accessible |
-| `POST` | `/api/projects` | ADMIN, MANAGER (`managerId` server-controlled for managers) |
-| `PUT` | `/api/projects/{id}` | ADMIN, owning MANAGER — **403** otherwise |
-| `DELETE` | `/api/projects/{id}` | ADMIN, owning MANAGER |
-
-### Tasks
-
-| Method | Endpoint | Access |
-|---|---|---|
-| `GET` | `/api/projects/{projectId}/tasks` | Scoped by role; supports `page`, `size`, `sort` |
-| `POST` | `/api/projects/{projectId}/tasks` | ADMIN, owning MANAGER — assignee must be a valid `EMPLOYEE` |
-| `PUT` | `/api/tasks/{id}` | ADMIN, owning MANAGER |
-| `PATCH` | `/api/tasks/{id}/status` | ADMIN, owning MANAGER, assigned EMPLOYEE — status field only |
-| `DELETE` | `/api/tasks/{id}` | ADMIN, owning MANAGER |
-
-### Comments
-
-| Method | Endpoint | Access |
-|---|---|---|
-| `GET` | `/api/tasks/{taskId}/comments` | Anyone with access to the task's project |
-| `POST` | `/api/tasks/{taskId}/comments` | ADMIN, owning MANAGER, assigned EMPLOYEE |
-| `DELETE` | `/api/comments/{commentId}` | Author, owning MANAGER, or ADMIN |
-
-### Error Responses
-
-Every error — validation, 401, 403, 404 — uses one shape:
-
-```json
-{
-  "timestamp": "2026-09-28T10:15:30.123Z",
-  "status": 400,
-  "message": "Validation failed",
-  "path": "/api/projects",
-  "errors": {
-    "title": "must not be blank"
-  }
-}
-```
-
-`errors` appears on validation failures only. 401s are written by `JwtAuthenticationEntryPoint` (the filter layer sits outside `@RestControllerAdvice`), 403/404 by `GlobalExceptionHandler` — same JSON either way.
-
+| 16 | Logout with valid access token | 200/204 |
+| 17 | Try to refresh using the now-revoked refresh token | 401 — Redis key should be gone (`DEL` on logout) |
+| 18 | Old access token still works until its own 15-min expiry | 200 (expected/accepted tradeoff per your design doc — don't treat this as a bug) |
+ 
 ---
-
-## Security Model
-
-| Concern | Approach |
-|---|---|
-| Password storage | BCrypt; hash never appears in any response DTO |
-| Session | Stateless; JWT verified per request without a DB round-trip |
-| Token theft window | Access token lives 15 min; refresh token revocable instantly via Redis `DEL` |
-| Authorization | `@PreAuthorize` with dedicated security beans for ownership (`@projectSecurity`, `@taskSecurity`, `@commentSecurity`) |
-| Mass assignment | Server-controlled fields (`role` on register, `managerId` for managers) are never client-supplied |
-| Enumeration | Same generic message for wrong password and unknown email; 404 instead of 403 on project reads |
-| Secrets | Injected via environment; no fallback signing key; startup fails loudly if unset |
-| CORS | Allowed origins come from config, not hardcoded |
-| Known trade-off | Access/refresh tokens are kept in `localStorage`; XSS exposure is documented and accepted for this project |
-
+ 
+## Phase 2 — User endpoints
+ 
+### 2.1 `GET /api/users`
+| # | Token | Expected |
+|---|---|---|
+| 19 | `admin` | 200, **full** user objects (check actual JSON, not just status) |
+| 20 | `managerA` | 200, **summary-only** fields (fewer fields than #19 — diff the two bodies) |
+| 21 | `employee1` | 403 |
+| 22 | no token | 401 |
+ 
+### 2.2 `POST /api/users`
+| # | Token | Body | Expected |
+|---|---|---|---|
+| 23 | `admin` | valid new user, any role incl. `ADMIN` | 201, role is whatever was sent (admin can set any role) |
+| 24 | `managerA` | same valid body | 403 — this was the previously-open hole, confirm it's actually closed now |
+| 25 | `employee1` | same | 403 |
+ 
+### 2.3 `DELETE /api/users/{id}`
+| # | Token | Expected |
+|---|---|---|
+| 26 | `admin`, deleting a user with no tasks | 200/204 |
+| 27 | `admin`, deleting `employee1` (has an assigned task) | check your guard clause behavior — either 400/409 blocking the delete, or cascading/nulling per your FK design; confirm it matches what you intended, not an unhandled 500 |
+| 28 | `managerA` | 403 |
+| 29 | `employee1` (self-delete attempt) | 403 |
+ 
+### 2.4 `GET /api/users/me`
+| # | Token | Expected |
+|---|---|---|
+| 30 | any valid token | 200, that user's own profile only, no password |
+ 
 ---
-
-## Testing
-
-The backend is verified against a **100-case Postman matrix** run with five identities: `admin`, `managerA`, `managerB`, `employee1` (assigned), `employee2` (unassigned).
-
-📄 **Full test plan: [`docs/postman-test-plan.md`](docs/postman-test-plan.md)** — every case lists the token used, the target resource, and the expected status code, so it can be replayed request by request or turned into a Postman collection with status assertions.
-
-| Phase | What it proves |
-|---|---|
-| Auth | Register ignores `role`; login errors leak nothing; 401 body shape matches `ErrorResponse`; refresh rotation kills the old token; logout revokes |
-| Users | Admin gets full objects, manager gets summary fields, employee gets 403 |
-| Projects | Manager A sees only Project A; non-owner gets **404** on read but **403** on write |
-| Tasks | Employee can `PATCH` status on their own task but gets **403** on `PUT`/`DELETE` even for that same task |
-| Comments | Viewing is broad, posting is narrow — an unassigned employee in the same project can read but not write |
-| Cross-cutting | No entities serialized directly; identical error shape across 400/401/403/404; missing `JWT_SECRET` fails startup |
-
+ 
+## Phase 3 — Project endpoints
+ 
+### 3.1 `GET /api/projects`
+| # | Token | Expected |
+|---|---|---|
+| 31 | `admin` | 200, **all** projects (A and B both present) |
+| 32 | `managerA` | 200, **only Project A** — confirm Project B is absent from the array, not just that status is 200 |
+| 33 | `employee1` | 200, only projects containing tasks assigned to them (Project A, via Task 1) |
+| 34 | `employee2` | 200, **empty array** (not assigned to anything) |
+ 
+### 3.2 `GET /api/projects/{id}` — the 404-vs-403 asymmetry, most important test in this phase
+| # | Token | Target | Expected |
+|---|---|---|---|
+| 35 | `admin` | Project A | 200 |
+| 36 | `managerA` | Project A (own) | 200 |
+| 37 | `managerA` | Project B (**not** own) | **404**, not 403 — this is the deliberate "don't leak existence" behavior, confirm it's actually 404 |
+| 38 | `managerA` | a project id that doesn't exist at all (e.g. 99999) | 404 — same status and, ideally, same message shape as #37 (can't distinguish "not yours" from "doesn't exist" from the response) |
+| 39 | `employee1` | Project A (has task there) | 200 |
+| 40 | `employee2` | Project A (no task there) | 404 |
+ 
+### 3.3 `POST /api/projects`
+| # | Token | Body | Expected |
+|---|---|---|---|
+| 41 | `managerA` | valid, no `managerId` in body | 201, `managerId` auto-set to `managerA`'s own id |
+| 42 | `managerA` | valid, but tries to set `managerId` to `managerB`'s id | should be rejected (400) or silently overridden — per your locked decision, MANAGER must never successfully supply `managerId`; confirm which behavior you implemented and that it's consistent |
+| 43 | `admin` | valid, explicit `managerId` = `managerB` | 201, project created under `managerB` |
+| 44 | `employee1` | valid body | 403 |
+| 45 | `managerA` | missing required field (e.g. no `title`) | 400 + `errors` map |
+ 
+### 3.4 `PUT /api/projects/{id}` — opposite asymmetry from 3.2, confirm it's actually 403 here
+| # | Token | Target | Expected |
+|---|---|---|---|
+| 46 | `admin` | Project A | 200 |
+| 47 | `managerA` | Project A (own) | 200 |
+| 48 | `managerA` | Project B (not own) | **403** — not 404 this time, opposite of `getProjectById` |
+| 49 | `employee1` | Project A | 403 |
+ 
+### 3.5 `DELETE /api/projects/{id}`
+| # | Token | Target | Expected |
+|---|---|---|---|
+| 50 | `admin` | any project | 200/204 |
+| 51 | `managerA` | Project A (own) | 200/204 |
+| 52 | `managerA` | Project B (not own) | 403 |
+| 53 | `employee1` | any project | 403 |
+| 54 | any token | project with tasks still attached | confirm your intended cascade/block behavior fires, not a raw FK constraint 500 |
+ 
 ---
-
-## Key Engineering Decisions
-
-### 🔧 Backend
-
-| Decision | Why |
-|---|---|
-| **Gate vs. scope authorization** | Yes/no questions ("may this caller do this?") are gates — `@PreAuthorize` plus a security bean. "Which rows may this caller see?" are scopes — an inline `switch` on role inside the service that shapes the query. Mixing them makes one annotation carry two jobs. |
-| **`@PreAuthorize` on the implementation, not the interface** | Ties to Spring's default CGLIB proxying and keeps the guard next to the code it protects. |
-| **Ownership checks, not just role checks** | `hasRole('MANAGER')` alone would let any manager edit any project. A small `@Component` called from SpEL answers "does this manager own this resource?" |
-| **Separate narrow `PATCH /status` endpoint** | Least privilege at the API design level: employees can flip status but can't rewrite title, description or assignment, even on their own task. |
-| **404 on project read, 403 on project write** | Reads hide existence so IDs can't be probed; writes to something you can already see fail loudly with 403. The asymmetry is deliberate and covered by tests. |
-| **DTOs at every boundary** | Entities are never serialized. Server-controlled fields never appear on request DTOs, which closes mass-assignment holes by construction. |
-| **Opaque refresh tokens in Redis** | A refresh call always does a server-side lookup anyway, so a JWT would add signing/parsing complexity for no benefit — and opaque tokens can be revoked instantly. |
-| **JWT filter never rejects, only identifies** | The filter leaves `SecurityContextHolder` empty on failure; Spring's access-control layer then routes to the entry point. Keeps "who are you?" and "may you?" cleanly separate. |
-| **Batch-fetched derived stats** | `managedProjectCount` / `assignedTaskCount` come from two grouped queries, never a query per row — no N+1. |
-| **Hard-delete users + denormalized snapshots** | Keeps the literal `DELETE` contract. `Comment.authorName` preserves history after an author is removed; soft-delete was considered and rejected as a bigger deviation than needed. |
-| **`open-in-view: false`** | No lazy loading leaking into the web layer; forces explicit fetching in the service. |
-
-### 🎨 Frontend
-
-| Decision | Why |
-|---|---|
-| **Signals over `BehaviorSubject`** | Current-user and list state are plain signals; simpler reads, no subscription management. |
-| **Classic Reactive Forms** | Mature validator and error model; async and cross-field validators are first-class. |
-| **Service owns HTTP, components don't** | Components stay presentational and testable. |
-| **Guards on parent routes** | One `authGuard` on the shell protects the whole subtree; `roleGuard` gates only `/users`. |
-| **Shared in-flight refresh guard** | Concurrent 401s queue behind one `/auth/refresh` call instead of racing and invalidating each other's rotated tokens. |
-| **Boot restore ≠ mid-session refresh** | `restoreSession()` and the interceptor's 401 handler are independent code paths for independent lifecycle moments. A timeout leaves tokens untouched (unknown), an explicit 401/400 clears them (dead). |
-| **403 → snackbar, 401 → refresh/redirect** | Matches what each status actually means for a logged-in user. |
-| **No dedicated project-detail route** | The create/edit and view dialogs cover it; row actions never navigate away from the list. |
-
+ 
+## Phase 4 — Task endpoints
+ 
+### 4.1 `GET /api/projects/{projectId}/tasks`
+| # | Token | Target project | Expected |
+|---|---|---|---|
+| 55 | `admin` | Project A | 200, all tasks in it |
+| 56 | `managerA` | Project A (own) | 200 |
+| 57 | `managerA` | Project B (not own) | 403 or 404 — **check which your gate-vs-scope design produces here** and confirm it's intentional (this endpoint wasn't explicitly called out in the `getProjectById` exception list, so it likely goes through the normal `@PreAuthorize` 403 path — verify) |
+| 58 | `employee1` | Project A | 200, but confirm the array is scoped to **only their own tasks**, not every task in the project |
+| 59 | `employee2` | Project A | 200, empty array (or 403/404 depending on your design — verify against your intended spec) |
+| 60 | any token | with `?page=0&size=1&sort=dueDate,asc` | pagination metadata correct (`totalElements`, `totalPages`, single item returned) |
+| 61 | any token | `?sort=priority,desc` | confirm sort actually applies, not silently ignored |
+ 
+### 4.2 `POST /api/projects/{projectId}/tasks`
+| # | Token | Body | Expected |
+|---|---|---|---|
+| 62 | `managerA` | valid, `assignedToId` = `employee1` | 201 |
+| 63 | `managerA` | `assignedToId` = a MANAGER's id (not an EMPLOYEE) | 400 — backend must re-validate role of assignee, don't trust client |
+| 64 | `managerA` | into Project B (not own) | 403 |
+| 65 | `employee1` | any project | 403 |
+| 66 | `managerA` | `dueDate` in the past | 400 + `errors` map |
+ 
+### 4.3 `PATCH /api/tasks/{id}/status` — narrow endpoint, test the width carefully
+| # | Token | Target task | Body | Expected |
+|---|---|---|---|---|
+| 67 | `employee1` | Task 1 (own) | `{status: "IN_PROGRESS"}` | 200 |
+| 68 | `employee1` | Task 1 | body includes `title`/other fields | confirm those are ignored/rejected — this endpoint should only ever touch `status` |
+| 69 | `employee2` | Task 1 (not theirs) | `{status: "DONE"}` | 403 |
+| 70 | `managerA` | Task 1 (owns the project) | `{status: "DONE"}` | 200 |
+| 71 | `managerB` | Task 1 (not their project) | `{status: "DONE"}` | 403 |
+| 72 | `admin` | Task 1 | `{status: "DONE"}` | 200 |
+| 73 | `employee1` | invalid status string (`"BANANA"`) | 400 |
+ 
+### 4.4 `PUT /api/tasks/{id}` — full edit, employee must never reach this
+| # | Token | Expected |
+|---|---|---|
+| 74 | `admin` | 200, full edit works |
+| 75 | `managerA` (own project's task) | 200 |
+| 76 | `managerB` (not their task) | 403 |
+| 77 | `employee1` (their **own assigned** task, using the full PUT instead of PATCH) | **403** — this is the key test proving the endpoint split is real; employee must not be able to bypass PATCH's narrowness by hitting PUT directly, even on their own task |
+ 
+### 4.5 `DELETE /api/tasks/{id}`
+| # | Token | Expected |
+|---|---|---|
+| 78 | `admin` | 200/204 |
+| 79 | `managerA` (own project) | 200/204 |
+| 80 | `managerB` (not own) | 403 |
+| 81 | `employee1` (even on their own assigned task) | 403 — employees never delete, full stop |
+ 
 ---
-
-## Author
-
-<table>
-  <tr>
-    <td>
-      <img src="https://github.com/harshkhatri11.png" width="80" height="80" style="border-radius: 50%;" alt="Harsh Khatri"/>
-    </td>
-    <td>
-      <strong>Harsh Khatri</strong><br/>
-      Full-Stack Software Engineer · 5+ years<br/>
-      Spring Boot · Angular · Redis · PostgreSQL · Docker<br/>
-      <br/>
-      <a href="https://github.com/harshkhatri11">🐙 GitHub</a> &nbsp;·&nbsp;
-      <a href="https://www.linkedin.com/in/harshk11/">💼 LinkedIn</a>
-    </td>
-  </tr>
-</table>
-
-> *Built end-to-end as a practice project mirroring a real senior-level assessment — secure API design, role and ownership enforcement, and a resilient Angular client.*
+ 
+## Phase 5 — Comment endpoints
+ 
+Confirm actual paths first — Status.md flags these as **inferred, not spec-defined**: `POST/GET /api/tasks/{taskId}/comments`, `DELETE /api/comments/{commentId}`. Adjust below if yours differ.
+ 
+### 5.1 `GET /api/tasks/{taskId}/comments` — broad
+| # | Token | Target task | Expected |
+|---|---|---|---|
+| 82 | `admin` | Task 1 | 200, all comments |
+| 83 | `managerA` (owns project) | Task 1 | 200 |
+| 84 | `employee1` (assigned to this exact task) | Task 1 | 200 |
+| 85 | `employee2` (same **project**, but not assigned to Task 1) | Task 1 | **200** — this is the "broad" half of the asymmetry, confirm employee2 CAN view even though not assigned |
+| 86 | `employee2` (unrelated to the project entirely) | Task 1 | 403 |
+ 
+### 5.2 `POST /api/tasks/{taskId}/comments` — narrow, this is the one most likely to be backwards
+| # | Token | Target task | Expected |
+|---|---|---|---|
+| 87 | `employee1` (assigned to Task 1) | Task 1 | 201 |
+| 88 | `employee2` (same project, not assigned to Task 1) | Task 1 | **403** — deliberately opposite of test #85. If this returns 200, the asymmetry is backwards; flag and fix before moving on |
+| 89 | `managerA` (owns project) | Task 1 | 201 |
+| 90 | `managerB` (not their project) | Task 1 | 403 |
+ 
+### 5.3 `DELETE /api/comments/{commentId}`
+| # | Token | Comment owner | Expected |
+|---|---|---|---|
+| 91 | `employee1` | own comment (from #87) | 200/204 |
+| 92 | `employee2` | someone else's comment | 403 |
+| 93 | `managerA` | any comment in own project, not authored by them | 200/204 — manager override |
+| 94 | `admin` | any comment anywhere | 200/204 — admin override |
+ 
+---
+ 
+## Phase 6 — Cross-cutting checks (run once at the end)
+ 
+| # | Check | How |
+|---|---|---|
+| 95 | No entity ever serialized directly | Skim every 200-response body from the phases above; every field should map to a documented DTO, no unexpected entity-internal fields (e.g. Hibernate proxy artifacts, back-references) |
+| 96 | `errors` map shape is consistent | Compare the `errors` field from #3, #4, #45, #66, #73 — same shape every time |
+| 97 | 401 vs 403 body shape identical | Diff a 401 response (#10) against a 403 response (#21) — both should be the same `ErrorResponse` shape, differing only in `status`/`message` |
+| 98 | `JWT_SECRET` actually read from env, not a hardcoded fallback | Restart the app with the env var unset; startup should fail loudly, not silently sign tokens with a default key |
+| 99 | Redis reachability | Kill Redis mid-session, attempt a refresh — should fail cleanly (not 500 with a stack trace), confirms you're not swallowing connection errors |
+| 100 | Full regression after any fix | If any test above fails and you patch it, re-run that entire phase, not just the one failing case — ownership-check bugs tend to cluster |
+ 
+---
+ 
+## Suggested Postman organization
+ 
+- One **Postman Collection** with folders matching the phases above (`0 — Setup`, `1 — Auth`, `2 — Users`, `3 — Projects`, `4 — Tasks`, `5 — Comments`, `6 — Cross-cutting`).
+- One **Environment** per "identity" isn't necessary — a single environment with `adminToken`, `managerAToken`, `managerBToken`, `employee1Token`, `employee2Token` variables, switched via the `Authorization` header (`Bearer {{managerAToken}}`) per request, is simpler to maintain.
+- Use a **Postman "Tests" script** on each request to assert status code automatically (`pm.test("status is 403", () => pm.response.to.have.status(403));`) so you can re-run the whole collection after any backend fix and get a pass/fail summary instead of eyeballing each response.
