@@ -1,0 +1,72 @@
+<div class="auth-page-wrapper">
+  <div class="auth-card">
+    <h1 class="auth-card__title">Welcome back</h1>
+    <p class="auth-card__subtitle">Log in to continue to TaskFlow</p>
+
+    <form [formGroup]="loginForm" (ngSubmit)="onSubmit()">
+      <div class="form-field-group">
+        <label for="email">Email</label>
+        <mat-form-field>
+          <input id="email" matInput type="email" formControlName="email" autocomplete="email" />
+          @if (shouldShowError('email')) {
+            <mat-error>
+              @if (this.email?.hasError('required')) {
+                Email is required.
+              } @else if (this.email?.hasError('email')) {
+                Enter a valid email address.
+              }
+            </mat-error>
+          }
+          <mat-icon matSuffix>mail</mat-icon>
+        </mat-form-field>
+      </div>
+
+      <div class="form-field-group">
+        <label for="password">Password</label>
+        <mat-form-field>
+          <input
+            id="password"
+            matInput
+            [type]="showPassword() ? 'text' : 'password'"
+            formControlName="password"
+            autocomplete="current-password"
+          />
+          <button
+            mat-icon-button
+            matSuffix
+            type="button"
+            (click)="togglePasswordVisibility()"
+            [attr.aria-label]="showPassword() ? 'Hide password' : 'Show password'"
+            [attr.aria-pressed]="showPassword()"
+          >
+            <mat-icon>{{ showPassword() ? 'visibility_off' : 'visibility' }}</mat-icon>
+          </button>
+
+          @if (shouldShowError('password')) {
+            <mat-error>
+              @if (this.password?.hasError('required')) {
+                Password is required.
+              } @else if (this.password?.hasError('minlength')) {
+                Password must be at least 6 characters.
+              }
+            </mat-error>
+          }
+        </mat-form-field>
+      </div>
+
+      <button
+        mat-flat-button
+        color="primary"
+        type="submit"
+        class="w-100 mt-2"
+        [disabled]="loginForm.invalid || submitting"
+      >
+        Log in
+      </button>
+    </form>
+
+    <div class="auth-card__footer">
+      Don't have an account? <a routerLink="/auth/register">Create one</a>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,30 @@
+<h2 mat-dialog-title>{{ project.title }}</h2>
+
+<mat-dialog-content>
+  <div class="view-row">
+    <span class="view-label">Status</span>
+    <span class="status-chip" [class]="'status-chip--' + project.status.toLowerCase()">
+      {{ project.status }}
+    </span>
+  </div>
+
+  <div class="view-row">
+    <span class="view-label">Manager</span>
+    <span class="view-value">{{ project.manager.name }}</span>
+  </div>
+
+  <div class="view-row">
+    <span class="view-label">Created</span>
+    <span class="view-value">{{ project.createdAt | date: 'medium' }}</span>
+  </div>
+
+  <div class="view-row view-row--stacked">
+    <span class="view-label">Description</span>
+    <p class="view-description">{{ project.description }}</p>
+  </div>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-stroked-button type="button" (click)="viewTasks()">View Tasks</button>
+  <button mat-flat-button type="button" (click)="close()">Close</button>
+</mat-dialog-actions>

@@ -1,0 +1,33 @@
+<mat-toolbar class="nav">
+  <a routerLink="/projects" class="nav__brand">
+    <mat-icon class="nav__brand-icon">bolt</mat-icon>
+    <span>TaskFlow</span>
+  </a>
+
+  <nav class="nav__links">
+    <a class="nav__link" routerLink="/projects" routerLinkActive="nav__link--active"> Projects </a>
+
+    @if (currentUser()?.role === 'ADMIN') {
+      <a class="nav__link" routerLink="/users" routerLinkActive="nav__link--active"> Users </a>
+    }
+  </nav>
+
+  <span class="nav__spacer"></span>
+
+  @if (currentUser(); as user) {
+    <div class="nav__identity">
+      <span class="nav__avatar" [style.background]="avatarColor(user.email)">
+        {{ user.email.charAt(0).toUpperCase() }}
+      </span>
+      <span class="nav__identity-text">
+        <span class="nav__identity-email">{{ user.email }}</span>
+        <span class="nav__identity-role">{{ user.role }}</span>
+      </span>
+    </div>
+  }
+
+  <button class="nav__logout" (click)="logout()">
+    <mat-icon>logout</mat-icon>
+    Logout
+  </button>
+</mat-toolbar>

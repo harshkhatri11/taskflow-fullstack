@@ -1,0 +1,51 @@
+<div class="comment-section">
+  <h3 class="comment-section__heading">Comments</h3>
+
+  @if (commentService.loading() && commentService.comments().length === 0) {
+    <p class="comment-section__status">Loading comments…</p>
+  } @else if (commentService.error()) {
+    <p class="comment-section__status comment-section__status--error">
+      {{ commentService.error() }}
+    </p>
+  } @else if (commentService.comments().length === 0) {
+    <p class="comment-section__status">No comments yet.</p>
+  } @else {
+    <ul class="comment-thread">
+      @for (comment of commentService.comments(); track comment.id) {
+        <li class="comment">
+          <span class="comment__avatar" [style.background]="avatarColor(comment.authorName)">
+            {{ comment.authorName.charAt(0) }}
+          </span>
+          <div class="comment__body">
+            <div class="comment__meta">
+              <span class="comment__author">{{ comment.authorName }}</span>
+              <span class="comment__date">{{ comment.createdAt | date: 'medium' }}</span>
+            </div>
+            <p class="comment__content">{{ comment.content }}</p>
+          </div>
+          @if (canDelete(comment)) {
+            <button
+              mat-icon-button
+              class="comment__delete"
+              matTooltip="Delete"
+              (click)="deleteComment(comment)"
+            >
+              <mat-icon>delete</mat-icon>
+            </button>
+          }
+        </li>
+      }
+    </ul>
+  }
+
+  @if (canPost()) {
+    <form [formGroup]="form" (ngSubmit)="submit()" class="comment-form">
+      <div class="form-field-group">
+        <label for="content" class="required-field">Add a comment</label>
+        <mat-form-field>
+          <textarea id="content" formControlName="content" matInput rows="2"></textarea>
+        </mat-form-field>
+      </div>
+    </form>
+  }
+</div>

@@ -1,0 +1,49 @@
+<h2 mat-dialog-title>{{ isEditMode ? 'Edit User' : 'Create User' }}</h2>
+
+<form [formGroup]="form" (ngSubmit)="submit()">
+  <mat-dialog-content class="user-edit">
+    <div class="field">
+      <label for="name">Name</label>
+      <mat-form-field>
+        <input id="name" formControlName="name" matInput />
+      </mat-form-field>
+    </div>
+
+    <div class="field">
+      <label for="email">Email</label>
+      <mat-form-field>
+        <input id="email" formControlName="email" matInput type="email" />
+      </mat-form-field>
+    </div>
+
+    @if (!isEditMode) {
+      <div class="field">
+        <label for="password">Password</label>
+        <mat-form-field>
+          <input id="password" formControlName="password" matInput type="password" />
+        </mat-form-field>
+      </div>
+    }
+
+    <div class="field">
+      <label for="role">Role</label>
+      <mat-form-field>
+        <mat-select id="role" formControlName="role">
+          @for (option of roleOptions; track option) {
+            <mat-option [value]="option">{{ option }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+    </div>
+  </mat-dialog-content>
+
+  <mat-dialog-actions align="end">
+    <button mat-button type="button" (click)="cancel()">Cancel</button>
+    <div class="submit-wrapper">
+      <button mat-flat-button type="submit" [disabled]="form.invalid">
+        {{ isEditMode ? 'Save' : 'Create' }}
+      </button>
+      <app-form-pulse [form]="form" />
+    </div>
+  </mat-dialog-actions>
+</form>

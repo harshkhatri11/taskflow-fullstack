@@ -1,0 +1,8 @@
+@if (loadingService.isLoading()) {
+  <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+}
+<app-nav></app-nav>
+
+<main class="shell__content">
+  <router-outlet></router-outlet>
+</main>

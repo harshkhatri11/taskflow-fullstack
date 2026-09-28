@@ -1,0 +1,26 @@
+# ===== Internal notes (local only) =====
+/fullstack-assessment-taskflow.md
+/jwt-spring-security-internals.md
+/postman-test-plan.md
+/Status.md
+
+# ===== Secrets / env =====
+.env
+.env.*
+!.env.example
+
+# ===== IDE =====
+.idea/
+*.iml
+
+# ===== OS =====
+.DS_Store
+
+# ===== Build output / dependencies =====
+target/
+node_modules/
+dist/
+.angular/
+
+# ===== Logs =====
+*.log

@@ -1,0 +1,19 @@
+<div class="not-found">
+  <div class="not-found__card">
+    <span class="not-found__code">404</span>
+    <h1 class="not-found__title">Page not found</h1>
+    <p class="not-found__message">
+      The page you're looking for doesn't exist or may have been moved.
+    </p>
+
+    <div class="not-found__actions">
+      <button mat-stroked-button (click)="goBack()">
+        <mat-icon>arrow_back</mat-icon>
+        Go back
+      </button>
+      <button mat-flat-button (click)="goHome()">
+        Go to {{ authService.currentUser() ? 'Projects' : 'Login' }}
+      </button>
+    </div>
+  </div>
+</div>

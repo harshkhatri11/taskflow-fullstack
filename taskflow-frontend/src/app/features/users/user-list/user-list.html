@@ -1,0 +1,26 @@
+<div class="user-list__toolbar">
+  <button mat-flat-button (click)="openCreateDialog()">Create User</button>
+</div>
+
+<div class="page-heading">
+  <h2 class="page-heading__title">Users</h2>
+  <span class="page-heading__meta">{{ userService.users().length }} total</span>
+</div>
+
+@if (userService.loading() && userService.users().length === 0) {
+  <div class="user-grid">
+    @for (i of skeletonRows; track i) {
+      <div class="user-card--skeleton"></div>
+    }
+  </div>
+} @else if (userService.error()) {
+  <p class="user-list__status user-list__status--error">{{ userService.error() }}</p>
+} @else if (userService.users().length === 0) {
+  <p class="user-list__status">No users to show.</p>
+} @else {
+  <div class="user-grid">
+    @for (user of userService.users(); track user.id) {
+      <app-user-card [user]="user" (edit)="openEditDialog($event)" (delete)="deleteUser($event)" />
+    }
+  </div>
+}

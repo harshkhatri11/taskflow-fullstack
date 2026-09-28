@@ -1,0 +1,43 @@
+@if (isInvalid()) {
+  <button
+    #trigger="cdkOverlayOrigin"
+    cdkOverlayOrigin
+    type="button"
+    class="form-pulse"
+    aria-haspopup="true"
+    [attr.aria-expanded]="isOpen()"
+    (mouseenter)="open()"
+    (mouseleave)="scheduleClose()"
+    (focus)="open()"
+    (blur)="scheduleClose()"
+    (click)="toggle()"
+    (keydown.escape)="close()"
+  >
+    <mat-icon class="form-pulse__icon">info</mat-icon>
+  </button>
+
+  <ng-template
+    cdkConnectedOverlay
+    [cdkConnectedOverlayOrigin]="trigger"
+    [cdkConnectedOverlayOpen]="isOpen()"
+    [cdkConnectedOverlayPositions]="positions"
+    [cdkConnectedOverlayHasBackdrop]="false"
+    (overlayOutsideClick)="close()"
+  >
+    <output
+      class="form-pulse__panel"
+      aria-live="polite"
+      (mouseenter)="open()"
+      (mouseleave)="scheduleClose()"
+    >
+      <p class="form-pulse__title">Please complete the following</p>
+      <ul>
+        @for (issue of issues(); track issue.field) {
+          <li>
+            <strong>{{ issue.field }}</strong> — {{ issue.message }}
+          </li>
+        }
+      </ul>
+    </output>
+  </ng-template>
+}

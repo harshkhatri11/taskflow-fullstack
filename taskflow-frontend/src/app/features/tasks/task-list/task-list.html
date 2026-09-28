@@ -1,0 +1,140 @@
+<div class="task-list__header">
+  <a routerLink="/projects" class="task-list__back">
+    <mat-icon>arrow_back</mat-icon>
+    Back to Projects
+  </a>
+  <h1 class="page-heading">
+    {{ projectTitle() ? projectTitle() + ' — Tasks' : 'Tasks' }}
+  </h1>
+</div>
+
+@if (canManage()) {
+  <div class="task-list__toolbar">
+    <button mat-flat-button (click)="openCreateDialog()">Create Task</button>
+  </div>
+}
+
+@if (taskService.loading() && taskService.tasks().length === 0) {
+  <p class="task-list__status">Loading tasks…</p>
+} @else if (taskService.error()) {
+  <p class="task-list__status task-list__status--error">
+    {{ taskService.error() }}
+  </p>
+} @else if (taskService.tasks().length === 0) {
+  <p class="task-list__status">No tasks to show.</p>
+} @else {
+  <div class="task-table-card">
+    <table
+      mat-table
+      matSort
+      (matSortChange)="onSortChange($event)"
+      [dataSource]="taskService.tasks()"
+      class="task-table"
+    >
+      <ng-container matColumnDef="task">
+        <th mat-header-cell *matHeaderCellDef>Task</th>
+        <td mat-cell *matCellDef="let task">
+          <div class="task-cell">
+            <span class="task-cell__title">{{ task.title }}</span>
+            <span class="task-cell__desc">{{ truncate(task.description) }}</span>
+          </div>
+        </td>
+      </ng-container>
+
+      <ng-container matColumnDef="priority">
+        <th mat-header-cell *matHeaderCellDef mat-sort-header>Priority</th>
+        <td mat-cell *matCellDef="let task">
+          <span class="priority-chip" [class]="'priority-chip--' + task.priority.toLowerCase()">
+            {{ task.priority }}
+          </span>
+        </td>
+      </ng-container>
+
+      <ng-container matColumnDef="status">
+        <th mat-header-cell *matHeaderCellDef>Status</th>
+        <td mat-cell *matCellDef="let task">
+          @if (isEmployee()) {
+            <mat-select
+              class="status-select"
+              [value]="task.status"
+              [disabled]="isSaving(task.id)"
+              (selectionChange)="onStatusChange(task, $event.value)"
+            >
+              @for (option of statusOptions; track option) {
+                <mat-option [value]="option">{{ option }}</mat-option>
+              }
+            </mat-select>
+          } @else {
+            <span class="status-chip" [class]="'status-chip--' + task.status.toLowerCase()">
+              <span class="status-chip__dot"></span>
+              {{ task.status }}
+            </span>
+          }
+        </td>
+      </ng-container>
+
+      <ng-container matColumnDef="dueDate">
+        <th mat-header-cell *matHeaderCellDef mat-sort-header>Due Date</th>
+        <td mat-cell *matCellDef="let task" class="due-cell">
+          {{ task.dueDate | date: 'mediumDate' }}
+        </td>
+      </ng-container>
+
+      <ng-container matColumnDef="assignedTo">
+        <th mat-header-cell *matHeaderCellDef>Assigned To</th>
+        <td mat-cell *matCellDef="let task">
+          <div class="assignee-cell">
+            <span class="assignee-avatar" [style.background]="avatarColor(task.assignedTo.name)">
+              {{ task.assignedTo.name.charAt(0) }}
+            </span>
+            <span>{{ task.assignedTo.name }}</span>
+          </div>
+        </td>
+      </ng-container>
+
+      <ng-container matColumnDef="actions">
+        <th mat-header-cell *matHeaderCellDef class="actions-header">Actions</th>
+        <td mat-cell *matCellDef="let task" class="actions-cell">
+          <button
+            mat-icon-button
+            class="action-icon action-icon--view"
+            matTooltip="View"
+            (click)="viewTask(task)"
+          >
+            <mat-icon>visibility</mat-icon>
+          </button>
+
+          @if (canManage()) {
+            <button
+              mat-icon-button
+              class="action-icon action-icon--edit"
+              matTooltip="Edit"
+              (click)="openEditDialog(task)"
+            >
+              <mat-icon>edit</mat-icon>
+            </button>
+            <button
+              mat-icon-button
+              class="action-icon action-icon--delete"
+              matTooltip="Delete"
+              (click)="deleteTask(task)"
+            >
+              <mat-icon>delete</mat-icon>
+            </button>
+          }
+        </td>
+      </ng-container>
+
+      <tr mat-header-row *matHeaderRowDef="columns"></tr>
+      <tr mat-row *matRowDef="let row; columns: columns"></tr>
+    </table>
+
+    <mat-paginator
+      [length]="taskService.pageInfo().totalElements"
+      [pageIndex]="pageIndex()"
+      [pageSize]="pageSize()"
+      [pageSizeOptions]="[5, 10, 25]"
+      (page)="onPageChange($event)"
+    ></mat-paginator>
+  </div>
+}

@@ -1,0 +1,49 @@
+<h2 mat-dialog-title>{{ task.title }}</h2>
+
+<mat-dialog-content class="task-view">
+  <p class="task-view__description">{{ task.description }}</p>
+
+  <div class="task-view__chips">
+    <span class="status-chip" [class]="'status-chip--' + task.status.toLowerCase()">
+      <span class="status-chip__dot"></span>
+      {{ task.status }}
+    </span>
+    <span class="priority-chip" [class]="'priority-chip--' + task.priority.toLowerCase()">
+      {{ task.priority }}
+    </span>
+  </div>
+
+  <dl class="task-view__meta">
+    <dt>Project</dt>
+    <dd>{{ task.project.title }}</dd>
+
+    <dt>Assigned to</dt>
+    <dd>{{ task.assignedTo.name }}</dd>
+
+    <dt>Due date</dt>
+    <dd>{{ task.dueDate | date: 'mediumDate' }}</dd>
+
+    <dt>Created</dt>
+    <dd>{{ task.createdAt | date: 'medium' }}</dd>
+  </dl>
+
+  <app-comment-section #commentSection [task]="task" />
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button type="button" [mat-dialog-close]="null">Close</button>
+
+  @if (commentSection.canPost()) {
+    <div class="submit-wrapper">
+      <button
+        mat-flat-button
+        type="button"
+        [disabled]="commentSection.form.invalid"
+        (click)="commentSection.submit()"
+      >
+        Post
+      </button>
+      <app-form-pulse [form]="commentSection.form" />
+    </div>
+  }
+</mat-dialog-actions>

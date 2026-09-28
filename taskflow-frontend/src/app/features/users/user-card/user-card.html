@@ -1,0 +1,63 @@
+<article class="user-card" [class]="'user-card--' + user().role.toLowerCase()">
+  <header class="user-card__header">
+    <span class="user-card__avatar" [style.background]="avatarBackground()">
+      {{ initial() }}
+    </span>
+
+    <div class="user-card__identity">
+      <span class="user-card__name">{{ user().name }}</span>
+      <span class="role-chip" [class]="'role-chip--' + user().role.toLowerCase()">
+        {{ roleLabel() }}
+      </span>
+    </div>
+  </header>
+
+  <div class="user-card__row">
+    <mat-icon class="user-card__row-icon">mail</mat-icon>
+    <span class="user-card__row-text">{{ user().email }}</span>
+    <button
+      mat-icon-button
+      class="user-card__copy"
+      matTooltip="Copy email"
+      [cdkCopyToClipboard]="user().email"
+      (cdkCopyToClipboardCopied)="onCopied($event)"
+    >
+      <mat-icon>{{ copied() ? 'check' : 'content_copy' }}</mat-icon>
+    </button>
+  </div>
+
+  <div class="user-card__row">
+    <mat-icon class="user-card__row-icon">calendar_today</mat-icon>
+    <span class="user-card__row-text">Joined {{ user().createdAt | date: 'mediumDate' }}</span>
+  </div>
+
+  <div class="user-card__stat">
+    @if (user().role === 'MANAGER') {
+      <mat-icon class="user-card__row-icon">folder</mat-icon>
+      <span
+        >{{ user().managedProjectCount }} active project{{
+          user().managedProjectCount === 1 ? '' : 's'
+        }}</span
+      >
+    } @else if (user().role === 'EMPLOYEE') {
+      <mat-icon class="user-card__row-icon">checklist</mat-icon>
+      <span
+        >{{ user().assignedTaskCount }} open task{{
+          user().assignedTaskCount === 1 ? '' : 's'
+        }}</span
+      >
+    } @else {
+      <mat-icon class="user-card__row-icon">admin_panel_settings</mat-icon>
+      <span>Full platform access</span>
+    }
+  </div>
+
+  <footer class="user-card__actions">
+    <button mat-icon-button matTooltip="Edit" (click)="edit.emit(user())">
+      <mat-icon>edit</mat-icon>
+    </button>
+    <button mat-icon-button matTooltip="Delete" (click)="delete.emit(user())">
+      <mat-icon>delete</mat-icon>
+    </button>
+  </footer>
+</article>

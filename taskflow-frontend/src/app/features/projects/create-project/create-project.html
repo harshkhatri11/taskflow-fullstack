@@ -1,0 +1,67 @@
+<h2 mat-dialog-title>{{ isEditMode ? 'Edit Project' : 'Create Project' }}</h2>
+
+<form [formGroup]="form" (ngSubmit)="submit()">
+  <mat-dialog-content>
+    <div class="form-field-group">
+      <label for="title" class="required-field">Title</label>
+      <mat-form-field class="full-width">
+        <input matInput formControlName="title" id="title" maxlength="100" />
+        @if (this.title?.hasError('required') && this.title?.touched) {
+          <mat-error>Title is required.</mat-error>
+        }
+        @if (this.title?.hasError('maxlength')) {
+          <mat-error>Title must not exceed 100 characters.</mat-error>
+        }
+      </mat-form-field>
+    </div>
+
+    <div class="form-field-group">
+      <label for="description" class="required-field">Description</label>
+      <mat-form-field class="full-width">
+        <textarea
+          id="description"
+          matInput
+          formControlName="description"
+          maxlength="500"
+          rows="4"
+        ></textarea>
+        <mat-hint align="end">{{ this.description?.value.length }}/500</mat-hint>
+        @if (this.description?.hasError('required') && this.description?.touched) {
+          <mat-error>Description is required.</mat-error>
+        }
+      </mat-form-field>
+    </div>
+
+    <div class="form-field-group">
+      <label for="status" class="required-field">Status</label>
+      <mat-form-field class="full-width">
+        <mat-select formControlName="status" id="status">
+          @for (option of statusOptions; track option) {
+            <mat-option [value]="option">{{ option }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+    </div>
+
+    @if (isAdmin) {
+      <div class="form-field-group">
+        <label for="managerId" class="required-field">Manager</label>
+        <mat-form-field class="full-width">
+          <mat-select formControlName="managerId" id="managerId">
+            @for (manager of managers(); track manager.id) {
+              <mat-option [value]="manager.id">{{ manager.name }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+      </div>
+    }
+  </mat-dialog-content>
+
+  <mat-dialog-actions align="end">
+    <button mat-button type="button" (click)="cancel()">Cancel</button>
+    <button mat-flat-button type="submit" [disabled]="form.invalid">
+      {{ isEditMode ? 'Save' : 'Create' }}
+    </button>
+    <app-form-pulse [form]="form" />
+  </mat-dialog-actions>
+</form>

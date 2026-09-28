@@ -1,0 +1,81 @@
+<h2 mat-dialog-title>{{ isEditMode ? 'Edit Task' : 'Create Task' }}</h2>
+
+<form [formGroup]="form" (ngSubmit)="submit()">
+  <mat-dialog-content class="task-edit">
+    <div class="form-field-group">
+      <label for="title" class="required-field">Title</label>
+      <mat-form-field>
+        <input id="title" formControlName="title" matInput />
+      </mat-form-field>
+    </div>
+
+    <div class="form-field-group">
+      <label for="description" class="required-field">Description</label>
+      <mat-form-field>
+        <textarea id="description" formControlName="description" matInput rows="3"></textarea>
+      </mat-form-field>
+    </div>
+
+    <div class="field-row">
+      <div class="form-field-group">
+        <label for="status" class="required-field">Status</label>
+        <mat-form-field>
+          <mat-select id="status" formControlName="status">
+            @for (option of statusOptions; track option) {
+              <mat-option [value]="option">{{ option }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+      </div>
+
+      <div class="form-field-group">
+        <label for="priority" class="required-field">Priority</label>
+        <mat-form-field>
+          <mat-select id="priority" formControlName="priority">
+            @for (option of priorityOptions; track option) {
+              <mat-option [value]="option">{{ option }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+      </div>
+    </div>
+
+    <div class="field-row">
+      <div class="form-field-group">
+        <label for="dueDate" class="required-field">Due Date</label>
+        <mat-form-field>
+          <input
+            id="dueDate"
+            formControlName="dueDate"
+            matInput
+            [matDatepicker]="picker"
+            [min]="today"
+          />
+          <mat-datepicker-toggle matSuffix [for]="picker"></mat-datepicker-toggle>
+          <mat-datepicker #picker></mat-datepicker>
+        </mat-form-field>
+      </div>
+
+      <div class="form-field-group">
+        <label for="assignedToId" class="required-field">Assigned To</label>
+        <mat-form-field>
+          <mat-select id="assignedToId" formControlName="assignedToId">
+            @for (employee of employees(); track employee.id) {
+              <mat-option [value]="employee.id">{{ employee.name }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+      </div>
+    </div>
+  </mat-dialog-content>
+
+  <mat-dialog-actions align="end">
+    <button mat-button type="button" (click)="cancel()">Cancel</button>
+    <div class="submit-wrapper">
+      <button mat-flat-button type="submit" [disabled]="form.invalid">
+        {{ isEditMode ? 'Save' : 'Create' }}
+      </button>
+      <app-form-pulse [form]="form" />
+    </div>
+  </mat-dialog-actions>
+</form>
